@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Phandalin – Crônicas dos Cinco Reinos</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0804;font-family:'Georgia',serif;overflow:hidden;user-select:none}
+
+.screen{position:fixed;inset:0;display:none;opacity:0;transition:opacity .3s ease}
+.screen.active{display:flex;opacity:1;animation:fadeIn .3s ease forwards}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+.stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0a0804}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;display:block;pointer-events:none}
+.overlay{position:absolute;pointer-events:none}
+
+/* HOTSPOT */
+.hs{
+  position:absolute;background:transparent;border:2px solid transparent;
+  cursor:pointer;border-radius:8px;transition:background .15s,border-color .15s,box-shadow .15s;
+  z-index:20;pointer-events:all;
+}
+.hs:hover{background:rgba(255,215,0,.22);border-color:rgba(255,215,0,.7);box-shadow:0 0 16px rgba(255,215,0,.35)}
+
+/* EDIT MODE */
+body.editmode .hs{
+  border:2px dashed rgba(255,120,0,.85)!important;
+  background:rgba(255,80,0,.15)!important;
+  cursor:grab!important;
+}
+body.editmode .hs.dragging{
+  cursor:grabbing!important;
+  background:rgba(255,200,0,.35)!important;
+  border-color:#ff0!important;
+  z-index:999!important;
+}
+body.editmode .hs:hover{
+  background:rgba(255,160,0,.28)!important;
+  border-color:#ffd700!important;
+}
+
+/* EDIT TOOLBAR */
+#edit-toolbar{
+  display:none;
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  background:linear-gradient(135deg,rgba(15,10,5,.97),rgba(30,18,5,.97));
+  border-bottom:2px solid rgba(255,140,0,.5);
+  padding:10px 16px;
+  align-items:center;gap:12px;flex-wrap:wrap;
+}
+body.editmode #edit-toolbar{display:flex}
+#edit-toolbar .et-label{color:#ffd700;font-size:12px;letter-spacing:.15em;font-weight:bold}
+#edit-toolbar .et-info{color:rgba(255,200,100,.7);font-size:11px;flex:1}
+#edit-toolbar button{
+  padding:7px 16px;border-radius:5px;font-family:'Georgia',serif;font-size:11px;
+  letter-spacing:.1em;cursor:pointer;transition:all .2s;border:1px solid;
+}
+.btn-save{background:#1a3d0a;border-color:#4a8;color:#8fa;letter-spacing:.15em}
+.btn-save:hover{background:#2a5d14;box-shadow:0 0 12px rgba(80,200,100,.3)}
+.btn-save.saved{background:#0d2a07;color:#5c9;border-color:#3a7}
+.btn-exit{background:rgba(40,15,5,.8);border-color:rgba(255,80,0,.5);color:#f96}
+.btn-exit:hover{background:rgba(80,20,5,.9);border-color:#f60}
+.btn-reset{background:rgba(20,10,5,.8);border-color:rgba(200,100,0,.4);color:#ca8}
+.btn-reset:hover{background:rgba(50,20,5,.9)}
+#edit-coords{
+  background:rgba(0,0,0,.6);border:1px solid rgba(255,180,0,.3);
+  color:#ffd700;font-family:monospace;font-size:11px;padding:5px 12px;
+  border-radius:4px;min-width:180px;
+}
+#edit-screen-label{color:rgba(255,200,100,.5);font-size:10px}
+
+/* HUD */
+.hud-back{
+  position:absolute;top:14px;left:14px;z-index:50;
+  padding:8px 16px;background:rgba(0,0,0,.78);
+  border:1px solid rgba(255,215,0,.4);color:#d4a017;
+  font-family:'Georgia',serif;font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+  border-radius:6px;cursor:pointer;transition:all .2s;backdrop-filter:blur(6px);
+}
+.hud-back:hover{background:rgba(212,160,23,.18);border-color:#d4a017}
+.hud-title{
+  position:absolute;top:14px;right:64px;z-index:50;
+  padding:7px 14px;background:rgba(0,0,0,.78);
+  border:1px solid rgba(255,215,0,.25);color:#d4a017;
+  font-family:'Georgia',serif;font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+  border-radius:6px;backdrop-filter:blur(6px);
+}
+body.editmode .hud-back, body.editmode .hud-title{top:62px}
+
+/* SIDE MENU */
+#side-menu{
+  position:fixed;top:0;right:-310px;width:290px;height:100%;
+  background:rgba(6,4,2,.97);border-left:1px solid rgba(212,160,23,.18);
+  z-index:500;display:flex;flex-direction:column;
+  transition:right .3s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(12px);
+}
+#side-menu.open{right:0}
+.menu-header{padding:20px 18px 12px;border-bottom:1px solid rgba(212,160,23,.12);display:flex;align-items:center;justify-content:space-between}
+.menu-header h2{color:#d4a017;font-size:12px;letter-spacing:.25em;text-transform:uppercase}
+.menu-close{background:none;border:none;color:#d4a017;font-size:16px;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s}
+.menu-close:hover{background:rgba(212,160,23,.15)}
+.menu-scroll{overflow-y:auto;flex:1}
+.menu-section-title{padding:10px 18px 4px;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(212,160,23,.35)}
+.menu-item{width:100%;background:none;border:none;padding:9px 18px;display:flex;align-items:center;gap:9px;cursor:pointer;color:rgba(200,180,140,.7);font-family:'Georgia',serif;font-size:12px;text-align:left;transition:all .15s;border-left:2px solid transparent}
+.menu-item:hover{background:rgba(212,160,23,.06);color:#d4a017;border-left-color:#d4a017}
+.menu-item .ico{font-size:13px;width:18px;text-align:center}
+.menu-divider{height:1px;background:rgba(212,160,23,.08);margin:2px 14px}
+#menu-overlay{position:fixed;inset:0;z-index:499;display:none;cursor:pointer}
+#menu-overlay.active{display:block}
+
+/* MENU + EDIT BUTTONS */
+#fab-wrap{position:fixed;bottom:18px;right:18px;z-index:150;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fab{
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(0,0,0,.82);border:1px solid rgba(212,160,23,.4);
+  color:#d4a017;font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;backdrop-filter:blur(6px);
+}
+.fab:hover{background:rgba(212,160,23,.18);box-shadow:0 0 18px rgba(212,160,23,.3)}
+#fab-edit{border-color:rgba(255,140,0,.45);color:#f90}
+#fab-edit:hover{background:rgba(255,120,0,.18);box-shadow:0 0 18px rgba(255,120,0,.3)}
+body.editmode #fab-edit{background:rgba(255,100,0,.25);border-color:#f60;color:#ffa}
+
+/* START */
+#screen-start{background:radial-gradient(ellipse at 50% 38%,#1f1208 0%,#0a0804 70%);align-items:center;justify-content:center}
+.start-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;position:relative;z-index:2}
+.start-orn{color:rgba(212,160,23,.4);font-size:16px;letter-spacing:.5em}
+.start-title{font-size:clamp(3rem,9vw,6.5rem);color:#d4a017;letter-spacing:.12em;text-shadow:0 0 60px rgba(218,165,32,.4);line-height:1}
+.start-sub{font-size:clamp(.6rem,1.2vw,.85rem);color:rgba(200,180,140,.5);letter-spacing:.4em;text-transform:uppercase}
+.start-div{width:200px;height:1px;background:linear-gradient(to right,transparent,rgba(212,160,23,.65),transparent)}
+.start-btn{margin-top:8px;padding:13px 46px;border:1px solid rgba(212,160,23,.55);background:transparent;color:#d4a017;font-family:'Georgia',serif;font-size:clamp(.8rem,1.4vw,1rem);letter-spacing:.3em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .3s}
+.start-btn:hover{background:rgba(212,160,23,.1);border-color:#d4a017;box-shadow:0 0 28px rgba(212,160,23,.25)}
+.start-tag{font-size:clamp(.45rem,.75vw,.6rem);color:rgba(200,180,140,.2);letter-spacing:.3em}
+.particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.p{position:absolute;width:2px;height:2px;border-radius:50%;background:rgba(212,160,23,.5);animation:rise linear infinite}
+@keyframes rise{from{transform:translateY(100vh);opacity:0}10%{opacity:1}90%{opacity:.4}to{transform:translateY(-5vh);opacity:0}}
+
+/* TOKEN PANEL */
+#token-panel{
+  position:fixed;left:-280px;top:50%;transform:translateY(-50%);
+  width:265px;background:rgba(6,4,2,.97);border:1px solid rgba(212,160,23,.25);
+  border-left:none;border-radius:0 10px 10px 0;z-index:300;
+  transition:left .3s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(12px);
+  display:flex;flex-direction:column;max-height:85vh;
+}
+#token-panel.open{left:0}
+#token-tab{
+  position:absolute;right:-36px;top:50%;transform:translateY(-50%);
+  width:36px;height:80px;background:rgba(6,4,2,.97);
+  border:1px solid rgba(212,160,23,.25);border-left:none;border-radius:0 8px 8px 0;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:#d4a017;transition:background .2s;writing-mode:vertical-lr;
+  letter-spacing:.1em;font-family:'Georgia',serif;font-size:10px;
+}
+#token-tab:hover{background:rgba(212,160,23,.12)}
+.tp-header{padding:14px 14px 8px;border-bottom:1px solid rgba(212,160,23,.12);display:flex;align-items:center;justify-content:space-between}
+.tp-header h3{color:#d4a017;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+.tp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px;overflow-y:auto;flex:1}
+.tp-token{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  cursor:pointer;padding:6px 4px;border-radius:6px;
+  border:1px solid rgba(212,160,23,.15);background:rgba(255,255,255,.03);
+  transition:all .15s;
+}
+.tp-token:hover{background:rgba(212,160,23,.12);border-color:rgba(212,160,23,.5)}
+.tp-token:active{transform:scale(.95)}
+.tp-token img{width:52px;height:52px;object-fit:contain;mix-blend-mode:multiply;pointer-events:none}
+.tp-token span{font-size:8px;color:rgba(212,160,23,.8);letter-spacing:.08em;text-align:center;line-height:1.2}
+.tp-hint{padding:6px 10px;font-size:9px;color:rgba(212,160,23,.35);text-align:center;letter-spacing:.05em;border-top:1px solid rgba(212,160,23,.08)}
+
+/* ACTIVE TOKENS ON MAP */
+.map-token{
+  position:absolute;z-index:100;cursor:grab;
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.8));
+  transition:filter .1s;
+  user-select:none;pointer-events:all;
+}
+.map-token:hover{filter:drop-shadow(0 4px 10px rgba(255,215,0,.5)) drop-shadow(0 2px 4px rgba(0,0,0,.9))}
+.map-token.dragging-token{cursor:grabbing!important;z-index:999!important;filter:drop-shadow(0 6px 16px rgba(255,215,0,.7)) drop-shadow(0 2px 4px rgba(0,0,0,.9))!important}
+.map-token img{width:56px;height:56px;object-fit:contain;mix-blend-mode:multiply;pointer-events:none;display:block}
+.map-token .tok-label{font-size:8px;color:#ffd700;text-shadow:0 1px 4px #000,0 0 8px #000;letter-spacing:.06em;white-space:nowrap;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:3px}
+.map-token .tok-del{
+  position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;
+  background:#900;border:1px solid #f55;color:#fff;font-size:10px;
+  display:none;align-items:center;justify-content:center;cursor:pointer;
+  line-height:1;font-family:monospace;
+}
+.map-token:hover .tok-del{display:flex}
+
+/* LOADER */
+.loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#0a0804;z-index:5;transition:opacity .3s}
+.loader.gone{opacity:0;pointer-events:none}
+.spinner{width:30px;height:30px;border:2px solid rgba(212,160,23,.2);border-top-color:#d4a017;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* TOOLTIP */
+#tip{position:fixed;z-index:600;background:rgba(4,3,1,.94);border:1px solid rgba(212,160,23,.35);color:#d4a017;font-family:'Georgia',serif;font-size:11px;letter-spacing:.08em;padding:5px 11px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap}
+#tip.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="tip"></div>
+
+<!-- FAB BUTTONS -->
+<div id="fab-wrap">
+  <button class="fab" id="fab-menu" onclick="toggleMenu()" title="Menu">☰</button>
+  <button class="fab" id="fab-edit" onclick="toggleEdit()" title="Modo Edição">✏️</button>
+</div>
+
+<!-- EDIT TOOLBAR -->
+<div id="edit-toolbar">
+  <span class="et-label">✏ MODO EDIÇÃO</span>
+  <span id="edit-screen-label" class="et-info">Tela: —</span>
+  <div id="edit-coords">cx: — &nbsp; cy: —</div>
+  <button class="btn-reset" onclick="resetPositions()">↺ Resetar</button>
+  <button class="btn-save" id="btn-save" onclick="savePositions()">💾 Salvar Posições</button>
+  <button class="btn-exit" onclick="toggleEdit()">✕ Sair</button>
+</div>
+
+<!-- SIDE MENU -->
+<div id="menu-overlay" onclick="closeMenu()"></div>
+<div id="side-menu">
+  <div class="menu-header">
+    <h2>⚔ Navegação</h2>
+    <button class="menu-close" onclick="closeMenu()">✕</button>
+  </div>
+  <div class="menu-scroll">
+    <div class="menu-section-title">Geral</div>
+    <button class="menu-item" onclick="menuGoTo('screen-start')"><span class="ico">🏠</span>Tela Inicial</button>
+    <button class="menu-item" onclick="menuGoTo('screen-world')"><span class="ico">🌍</span>Mapa Mundi</button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Reino Humano — Phandalin</div>
+    <button class="menu-item" onclick="menuGoTo('screen-humano')"><span class="ico">🏰</span>Cidade</button>
+    <button class="menu-item" onclick="menuGoTo('loc-humano-0')"><span class="ico">🍺</span>Taverna</button>
+    <button class="menu-item" onclick="menuGoTo('loc-humano-1')"><span class="ico">⚔</span>Quartel</button>
+    <button class="menu-item" onclick="menuGoTo('loc-humano-2')"><span class="ico">🛒</span>Mercado</button>
+    <button class="menu-item" onclick="menuGoTo('loc-humano-3')"><span class="ico">📚</span>Biblioteca</button>
+    <button class="menu-item" onclick="menuGoTo('loc-humano-4')"><span class="ico">👑</span>Castelo</button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Reino Élfico — Eluvarion</div>
+    <button class="menu-item" onclick="menuGoTo('screen-elfico')"><span class="ico">🌲</span>Cidade</button>
+    <button class="menu-item" onclick="menuGoTo('loc-elfico-0')"><span class="ico">⛪</span>Templo</button>
+    <button class="menu-item" onclick="menuGoTo('loc-elfico-1')"><span class="ico">📖</span>Biblioteca</button>
+    <button class="menu-item" onclick="menuGoTo('loc-elfico-2')"><span class="ico">🌸</span>Jardim</button>
+    <button class="menu-item" onclick="menuGoTo('loc-elfico-3')"><span class="ico">🛡</span>Quartel</button>
+    <button class="menu-item" onclick="menuGoTo('loc-elfico-4')"><span class="ico">🏹</span>Oficina</button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Reino Tiefling — Cidadela</div>
+    <button class="menu-item" onclick="menuGoTo('screen-tiefling')"><span class="ico">🔥</span>Cidade</button>
+    <button class="menu-item" onclick="menuGoTo('loc-tiefling-0')"><span class="ico">⚒</span>Forja</button>
+    <button class="menu-item" onclick="menuGoTo('loc-tiefling-1')"><span class="ico">🏯</span>Palácio</button>
+    <button class="menu-item" onclick="menuGoTo('loc-tiefling-2')"><span class="ico">⛓</span>Prisão</button>
+    <button class="menu-item" onclick="menuGoTo('loc-tiefling-3')"><span class="ico">⚗</span>Laboratório</button>
+    <button class="menu-item" onclick="menuGoTo('loc-tiefling-4')"><span class="ico">💀</span>Templo</button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Reino Goblin — Assentamento</div>
+    <button class="menu-item" onclick="menuGoTo('screen-goblin')"><span class="ico">🪝</span>Cidade</button>
+    <button class="menu-item" onclick="menuGoTo('loc-goblin-0')"><span class="ico">🏚</span>Covil</button>
+    <button class="menu-item" onclick="menuGoTo('loc-goblin-1')"><span class="ico">💰</span>Tesouro</button>
+    <button class="menu-item" onclick="menuGoTo('loc-goblin-2')"><span class="ico">🥊</span>Arena</button>
+    <button class="menu-item" onclick="menuGoTo('loc-goblin-3')"><span class="ico">🍖</span>Cozinha</button>
+    <button class="menu-item" onclick="menuGoTo('loc-goblin-4')"><span class="ico">🔮</span>Shaman</button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Reino Orc — Acampamento</div>
+    <button class="menu-item" onclick="menuGoTo('screen-orc')"><span class="ico">🪓</span>Cidade</button>
+    <button class="menu-item" onclick="menuGoTo('loc-orc-0')"><span class="ico">👑</span>Trono</button>
+    <button class="menu-item" onclick="menuGoTo('loc-orc-1')"><span class="ico">🔨</span>Armaria</button>
+    <button class="menu-item" onclick="menuGoTo('loc-orc-2')"><span class="ico">🍗</span>Refeitório</button>
+    <button class="menu-item" onclick="menuGoTo('loc-orc-3')"><span class="ico">🤜</span>Arena</button>
+    <button class="menu-item" onclick="menuGoTo('loc-orc-4')"><span class="ico">🐾</span>Estábulo</button>
+  </div>
+  <div style="padding:8px 18px;border-top:1px solid rgba(212,160,23,.08);font-size:8px;color:rgba(200,180,140,.18);letter-spacing:.2em;text-align:center">PHANDALIN · CRÔNICAS DOS CINCO REINOS</div>
+</div>
+
+<!-- TOKEN PANEL -->
+<div id="token-panel">
+  <div id="token-tab" onclick="toggleTokenPanel()">🎲 TOKENS</div>
+  <div class="tp-header">
+    <h3>🎲 Tokens D&D</h3>
+  </div>
+  <div class="tp-grid" id="tp-grid">
+    <!-- Built by JS -->
+  </div>
+  <div class="tp-hint">Clique para adicionar ao mapa • Arraste para mover • ✕ para remover</div>
+</div>
+
+<!-- START -->
+<div id="screen-start" class="screen active">
+  <div class="particles" id="particles"></div>
+  <div class="start-wrap">
+    <div class="start-orn">✦ ✦ ✦</div>
+    <h1 class="start-title">PHANDALIN</h1>
+    <div class="start-div"></div>
+    <p class="start-sub">Crônicas dos Cinco Reinos</p>
+    <button class="start-btn" onclick="goTo('screen-world')">⚔ &nbsp;Iniciar Aventura&nbsp; ⚔</button>
+    <p class="start-tag">MAPA INTERATIVO DE D&D</p>
+  </div>
+</div>
+
+<!-- WORLD MAP -->
+<div id="screen-world" class="screen">
+  <div class="stage">
+    <div class="loader" id="load-world"><div class="spinner"></div></div>
+    <img id="img-world" alt="Mapa Mundi"
+      src="https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/68644a13c_page_2.png"
+      onload="imgReady('world')"/>
+    <div class="overlay" id="ov-world"></div>
+  </div>
+</div>
+
+<!-- City + Location screens built by JS -->
+<div id="dyn-screens"></div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   NEW IMAGE BASE (user's new uploads)
+══════════════════════════════════════════════════ */
+const BASE = 'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/';
+
+/* ══════════════════════════════════════════════════
+   DEFAULT HOTSPOT COORDINATES
+   Measured pixel-by-pixel from the provided images.
+   
+   WORLD MAP (page_2 – 1024×714 approx):
+   ─ "Reino Humano"  pin visible at ~22% x, ~55% y
+   ─ "Reino Élfico"  pin visible at ~56% x, ~30% y  
+   ─ "Reino Tiefling"pin visible at ~69% x, ~55% y
+   ─ "Reino Goblin"  pin visible at ~42% x, ~45% y  (TESOURARIA text area)
+   ─ "Reino Orc"     pin visible at ~60% x, ~32% y  (Warchief area top-right)
+
+   CITY MAPS (all ~1024×576):
+   ─ Bottom nav bar at ~84–90% height
+   ─ 5 icons, first at ~28%, then ~37%, ~46%, ~56%, ~65% x
+   ─ Each icon+text block spans ~8% width
+
+   All coords are cx (center-x %), cy (center-y %), w%, h%
+══════════════════════════════════════════════════ */
+
+const DEFAULTS = {
+  // WORLD MAP — 5 kingdom pins
+  world: [
+    { label:'Reino Humano',   cx:22,   cy:55,  w:14, h:11 },
+    { label:'Reino Élfico',   cx:56,   cy:30,  w:14, h:11 },
+    { label:'Reino Tiefling', cx:57,   cy:55,  w:14, h:11 },
+    { label:'Reino Goblin',   cx:42,   cy:45,  w:14, h:11 },
+    { label:'Reino Orc',      cx:60,   cy:32,  w:14, h:11 },
+  ],
+  // PHANDALIN CITY (page_3) — icons on bottom bar
+  // From image: Taverna ~27%, Quartel ~37%, Mercado ~47%, Biblioteca ~57%, Castelo ~67%
+  // Bar height center ~87%
+  humano: [
+    { label:'Taverna',    cx:27.5, cy:87, w:10, h:12 },
+    { label:'Quartel',    cx:37.5, cy:87, w:10, h:12 },
+    { label:'Mercado',    cx:47.5, cy:87, w:10, h:12 },
+    { label:'Biblioteca', cx:57.5, cy:87, w:10, h:12 },
+    { label:'Castelo',    cx:67.5, cy:87, w:10, h:12 },
+  ],
+  // ELUVARION (page_9) — same bar layout
+  elfico: [
+    { label:'Templo',  cx:27.5, cy:87, w:10, h:12 },
+    { label:'Livros',  cx:37.5, cy:87, w:10, h:12 },
+    { label:'Jardim',  cx:47.5, cy:87, w:10, h:12 },
+    { label:'Quartel', cx:57.5, cy:87, w:10, h:12 },
+    { label:'Oficina', cx:67.5, cy:87, w:10, h:12 },
+  ],
+  // TIEFLING CITADEL (page_15) — same bar, labels: FORJA, PALÁCIO, PRISÃO, ALQUIMISTA, TEMPLO
+  tiefling: [
+    { label:'Forja',       cx:27.5, cy:87, w:10, h:12 },
+    { label:'Palácio',     cx:37.5, cy:87, w:10, h:12 },
+    { label:'Prisão',      cx:47.5, cy:87, w:10, h:12 },
+    { label:'Alquimista',  cx:57.5, cy:87, w:10, h:12 },
+    { label:'Templo',      cx:67.5, cy:87, w:10, h:12 },
+  ],
+  // GOBLIN SETTLEMENT (page_21) — labels: COVIL, TESOURO, ARENA, COZINHA, SHAMAN
+  goblin: [
+    { label:'Covil',   cx:27.5, cy:87, w:10, h:12 },
+    { label:'Tesouro', cx:37.5, cy:87, w:10, h:12 },
+    { label:'Arena',   cx:47.5, cy:87, w:10, h:12 },
+    { label:'Cozinha', cx:57.5, cy:87, w:10, h:12 },
+    { label:'Shaman',  cx:67.5, cy:87, w:10, h:12 },
+  ],
+  // ORC WAR CAMP (page_27) — labels: TRONO, ARMARIA, REFEITÓRIO, ARENA, ESTÁBULO
+  orc: [
+    { label:'Trono',      cx:27.5, cy:87, w:10, h:12 },
+    { label:'Armaria',    cx:37.5, cy:87, w:10, h:12 },
+    { label:'Refeitório', cx:47.5, cy:87, w:10, h:12 },
+    { label:'Arena',      cx:57.5, cy:87, w:10, h:12 },
+    { label:'Estábulo',   cx:67.5, cy:87, w:10, h:12 },
+  ],
+};
+// Location screens reuse kingdom nav bars (same images have nav at bottom)
+// We'll auto-generate these from kingdom data
+
+/* ══ KINGDOM DATA ══ */
+const KINGDOMS = [
+  {
+    id:'humano', title:'Phandalin', color:'#c9a84c',
+    img: BASE+'5b37f0b88_page_3.png',
+    locs:[
+      { name:'Taverna',         img: BASE+'3157b4f81_page_4.png'  },
+      { name:'Quartel',         img: BASE+'250ea676e_page_5.png'  },
+      { name:'Mercado Central', img: BASE+'61ee527b4_page_6.png'  },
+      { name:'Biblioteca',      img: BASE+'49a005d30_page_7.png'  },
+      { name:'Castelo',         img: BASE+'0e36fd969_page_8.png'  },
+    ]
+  },
+  {
+    id:'elfico', title:'Eluvarion', color:'#4a9e5c',
+    img: BASE+'ed2970fcd_page_9.png',
+    locs:[
+      { name:'Templo de Lumiara',        img: BASE+'8a47248bc_page_10.png' },
+      { name:'Biblioteca de Cristal',    img: BASE+'b35f4377e_page_11.png' },
+      { name:'Jardim das Almas',         img: BASE+'a996e08e6_page_12.png' },
+      { name:'Quartel da Guarda Verde',  img: BASE+'150441b4e_page_13.png' },
+      { name:'Oficina de Arcos Lunares', img: BASE+'fdc60deaf_page_14.png' },
+    ]
+  },
+  {
+    id:'tiefling', title:'Cidadela Tiefling', color:'#c44040',
+    img: BASE+'5819a9cb6_page_15.png',
+    locs:[
+      { name:'A Forja de Almas',      img: BASE+'db022dfcc_page_16.png' },
+      { name:'Palácio de Obsidiana',  img: BASE+'569a87282_page_17.png' },
+      { name:'Prisão de Fogo',        img: BASE+'8a243bef6_page_18.png' },
+      { name:'Laboratório de Sangue', img: BASE+'bceb0cc33_page_19.png' },
+      { name:'Templo do Abismo',      img: BASE+'7165ffc72_page_20.png' },
+    ]
+  },
+  {
+    id:'goblin', title:'Assentamento Goblin', color:'#8a9a3c',
+    img: BASE+'1133aabed_page_21.png',
+    locs:[
+      { name:'Covil das Sombras', img: BASE+'00a6bac16_page_22.png' },
+      { name:'A Pilha de Ouro',   img: BASE+'9283c7a31_page_23.png' },
+      { name:'O Fojo de Luta',    img: BASE+'3304bdef7_page_24.png' },
+      { name:'A Cozinha Caótica', img: BASE+'a3dbe5c8e_page_25.png' },
+      { name:'Tenda do Shaman',   img: BASE+'08607fe94_page_26.png' },
+    ]
+  },
+  {
+    id:'orc', title:'Acampamento de Guerra', color:'#7a5c2e',
+    img: BASE+'3d7b24019_page_27.png',
+    locs:[
+      { name:'Trono de Grudnak',    img: BASE+'1a71f9400_page_28.png' },
+      { name:'Armaria de Ferro',    img: BASE+'a3f58c0a4_page_29.png' },
+      { name:'Refeitório de Guerra',img: BASE+'bce30e0f7_page_30.png' },
+      { name:'Arena',               img: BASE+'7f5bfb92c_page_31.png' },
+      { name:'Estábulo de Feras',   img: BASE+'bf7613bad_page_32.png' },
+    ]
+  }
+];
+
+/* ══ SAVED POSITIONS (localStorage) ══ */
+const STORAGE_KEY = 'phandalin_hotspots_v2';
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function saveToDisk(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+let savedPositions = loadSaved();
+
+function getHS(screenId) {
+  // Saved overrides defaults
+  if (savedPositions[screenId]) return JSON.parse(JSON.stringify(savedPositions[screenId]));
+  if (DEFAULTS[screenId]) return JSON.parse(JSON.stringify(DEFAULTS[screenId]));
+  return null;
+}
+
+/* ══ BUILD HS_MAP with actions ══ */
+// This is rebuilt each time positions change
+let HS_MAP = {};
+
+function buildHSMap() {
+  HS_MAP = {};
+
+  // World
+  const worldHS = getHS('world');
+  const worldTargets = ['screen-humano','screen-elfico','screen-tiefling','screen-goblin','screen-orc'];
+  HS_MAP['world'] = worldHS.map((h,i) => ({...h, action:()=>goTo(worldTargets[i])}));
+
+  KINGDOMS.forEach(k => {
+    const cityHS = getHS(k.id);
+    HS_MAP[k.id] = cityHS.map((h,i) => ({...h, action:()=>goTo(`loc-${k.id}-${i}`)}));
+
+    k.locs.forEach((loc, i) => {
+      const locId = `${k.id}-${i}`;
+      // Location screens: reuse SAME nav bar coords as city (same kingdom)
+      // but get them fresh in case city was edited
+      const savedLocHS = savedPositions[locId] || savedPositions[k.id] || DEFAULTS[k.id];
+      HS_MAP[locId] = JSON.parse(JSON.stringify(savedLocHS)).map((h,j) => ({
+        ...h,
+        action: ()=>goTo(`loc-${k.id}-${j}`)
+      }));
+    });
+  });
+}
+buildHSMap();
+
+/* ══ BUILD DYNAMIC SCREENS ══ */
+const dynContainer = document.getElementById('dyn-screens');
+
+KINGDOMS.forEach(k => {
+  // City screen
+  const city = document.createElement('div');
+  city.id = `screen-${k.id}`;
+  city.className = 'screen';
+  city.innerHTML = `
+    <div class="stage">
+      <button class="hud-back" onclick="goTo('screen-world')">← Mapa Mundi</button>
+      <div class="hud-title" style="color:${k.color}">${k.title}</div>
+      <div class="loader" id="load-${k.id}"><div class="spinner"></div></div>
+      <img id="img-${k.id}" alt="${k.title}" src="${k.img}" onload="imgReady('${k.id}')"/>
+      <div class="overlay" id="ov-${k.id}"></div>
+    </div>`;
+  dynContainer.appendChild(city);
+
+  // Location screens
+  k.locs.forEach((loc, i) => {
+    const locId = `${k.id}-${i}`;
+    const div = document.createElement('div');
+    div.id = `loc-${k.id}-${i}`;
+    div.className = 'screen';
+    div.innerHTML = `
+      <div class="stage">
+        <button class="hud-back" onclick="goTo('screen-${k.id}')">← ${k.title}</button>
+        <div class="hud-title" style="color:${k.color}">${loc.name}</div>
+        <div class="loader" id="load-${locId}"><div class="spinner"></div></div>
+        <img id="img-${locId}" alt="${loc.name}" src="${loc.img}" onload="imgReady('${locId}')"/>
+        <div class="overlay" id="ov-${locId}"></div>
+      </div>`;
+    dynContainer.appendChild(div);
+  });
+});
+
+/* ══ PLACE HOTSPOTS ══ */
+function placeHotspots(imgId) {
+  const imgEl = document.getElementById('img-' + imgId);
+  const ovEl  = document.getElementById('ov-'  + imgId);
+  const hsList = HS_MAP[imgId];
+  if (!imgEl || !ovEl || !hsList) return;
+  if (!imgEl.complete || !imgEl.naturalWidth) return;
+
+  const imgRect   = imgEl.getBoundingClientRect();
+  const stageRect = imgEl.parentElement.getBoundingClientRect();
+  const offL = imgRect.left - stageRect.left;
+  const offT = imgRect.top  - stageRect.top;
+  const W = imgRect.width, H = imgRect.height;
+
+  ovEl.style.cssText = `position:absolute;left:${offL}px;top:${offT}px;width:${W}px;height:${H}px;pointer-events:none`;
+  ovEl.innerHTML = '';
+
+  hsList.forEach((hs, idx) => {
+    const bw = (hs.w/100)*W, bh = (hs.h/100)*H;
+    const bx = (hs.cx/100)*W - bw/2, by = (hs.cy/100)*H - bh/2;
+    const btn = document.createElement('button');
+    btn.className = 'hs';
+    btn.title = hs.label;
+    btn.dataset.idx = idx;
+    btn.dataset.imgId = imgId;
+    btn.style.cssText = `left:${bx}px;top:${by}px;width:${bw}px;height:${bh}px`;
+    btn.addEventListener('click', e => { if(!editMode) hs.action(); });
+    btn.addEventListener('mouseenter', e => { if(!editMode) tip(e, hs.label); });
+    btn.addEventListener('mousemove',  e => { if(!editMode) tipMove(e); });
+    btn.addEventListener('mouseleave', hideTip);
+    if (editMode) makeDraggable(btn, imgId, idx, W, H);
+    ovEl.appendChild(btn);
+  });
+
+  // Click-to-get-coords in edit mode
+  ovEl.addEventListener('click', e => {
+    if (!editMode) return;
+    const r = ovEl.getBoundingClientRect();
+    const px = ((e.clientX-r.left)/r.width*100).toFixed(1);
+    const py = ((e.clientY-r.top)/r.height*100).toFixed(1);
+    document.getElementById('edit-coords').textContent = `cx: ${px}%  cy: ${py}%`;
+  }, true);
+}
+
+/* ══ DRAG TO REPOSITION ══ */
+function makeDraggable(btn, imgId, idx, W, H) {
+  let startX, startY, startLeft, startTop;
+
+  btn.addEventListener('mousedown', e => {
+    if (!editMode) return;
+    e.preventDefault();
+    btn.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY;
+    startLeft = parseFloat(btn.style.left);
+    startTop  = parseFloat(btn.style.top);
+
+    function onMove(e) {
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      const newL = Math.max(0, Math.min(W - parseFloat(btn.style.width),  startLeft + dx));
+      const newT = Math.max(0, Math.min(H - parseFloat(btn.style.height), startTop  + dy));
+      btn.style.left = newL + 'px';
+      btn.style.top  = newT + 'px';
+      // Update live coords display
+      const cx = ((newL + parseFloat(btn.style.width)/2)  / W * 100).toFixed(1);
+      const cy = ((newT + parseFloat(btn.style.height)/2) / H * 100).toFixed(1);
+      document.getElementById('edit-coords').textContent = `"${HS_MAP[imgId][idx].label}"  cx: ${cx}%  cy: ${cy}%`;
+    }
+    function onUp() {
+      btn.classList.remove('dragging');
+      // Persist new position into HS_MAP
+      const newL = parseFloat(btn.style.left);
+      const newT = parseFloat(btn.style.top);
+      const bw   = parseFloat(btn.style.width);
+      const bh   = parseFloat(btn.style.height);
+      const cx = (newL + bw/2) / W * 100;
+      const cy = (newT + bh/2) / H * 100;
+      HS_MAP[imgId][idx].cx = cx;
+      HS_MAP[imgId][idx].cy = cy;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  });
+
+  // Touch support
+  btn.addEventListener('touchstart', e => {
+    if (!editMode) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    startX = touch.clientX; startY = touch.clientY;
+    startLeft = parseFloat(btn.style.left);
+    startTop  = parseFloat(btn.style.top);
+    btn.classList.add('dragging');
+  }, {passive:false});
+  btn.addEventListener('touchmove', e => {
+    if (!editMode) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dx = touch.clientX - startX, dy = touch.clientY - startY;
+    const newL = Math.max(0, Math.min(W - parseFloat(btn.style.width),  startLeft + dx));
+    const newT = Math.max(0, Math.min(H - parseFloat(btn.style.height), startTop  + dy));
+    btn.style.left = newL + 'px';
+    btn.style.top  = newT + 'px';
+    const cx = ((newL + parseFloat(btn.style.width)/2)  / W * 100).toFixed(1);
+    const cy = ((newT + parseFloat(btn.style.height)/2) / H * 100).toFixed(1);
+    document.getElementById('edit-coords').textContent = `"${HS_MAP[imgId][idx].label}"  cx:${cx}% cy:${cy}%`;
+  }, {passive:false});
+  btn.addEventListener('touchend', e => {
+    if (!editMode) return;
+    btn.classList.remove('dragging');
+    const newL = parseFloat(btn.style.left);
+    const newT = parseFloat(btn.style.top);
+    HS_MAP[imgId][idx].cx = (newL + parseFloat(btn.style.width)/2)  / W * 100;
+    HS_MAP[imgId][idx].cy = (newT + parseFloat(btn.style.height)/2) / H * 100;
+  });
+}
+
+function imgReady(imgId) {
+  const loader = document.getElementById('load-' + imgId);
+  if (loader) { loader.classList.add('gone'); setTimeout(()=>loader.remove(), 400); }
+  placeHotspots(imgId);
+}
+
+let resizeT;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    Object.keys(HS_MAP).forEach(id => {
+      const img = document.getElementById('img-' + id);
+      if (img && img.complete && img.naturalWidth) placeHotspots(id);
+    });
+  }, 100);
+});
+
+/* ══ NAVIGATION ══ */
+let current = 'screen-start';
+function goTo(id) {
+  if (id === current) return;
+  const prev = document.getElementById(current);
+  const next = document.getElementById(id);
+  if (!next) return;
+  prev.classList.remove('active');
+  next.classList.add('active');
+  current = id;
+  closeMenu();
+  document.getElementById('edit-screen-label').textContent = 'Tela: ' + id;
+  setTimeout(() => {
+    const img = next.querySelector('img');
+    if (img && img.complete && img.naturalWidth) {
+      placeHotspots(img.id.replace('img-',''));
+    }
+  }, 40);
+}
+function menuGoTo(id) { goTo(id); }
+
+/* ══ EDIT MODE ══ */
+let editMode = false;
+
+function toggleEdit() {
+  editMode = !editMode;
+  document.body.classList.toggle('editmode', editMode);
+  document.getElementById('edit-screen-label').textContent = 'Tela: ' + current;
+  // Rebuild all visible hotspots with/without drag
+  Object.keys(HS_MAP).forEach(id => {
+    const img = document.getElementById('img-' + id);
+    if (img && img.complete && img.naturalWidth) placeHotspots(id);
+  });
+  const btn = document.getElementById('btn-save');
+  btn.classList.remove('saved');
+  btn.textContent = '💾 Salvar Posições';
+}
+
+function savePositions() {
+  // Gather current HS_MAP positions (cx, cy) and merge with saved
+  const toSave = {};
+  Object.keys(HS_MAP).forEach(id => {
+    // Only save cx/cy (not the action function)
+    toSave[id] = HS_MAP[id].map(h => ({
+      label: h.label, cx: +h.cx.toFixed(2), cy: +h.cy.toFixed(2), w: h.w, h: h.h
+    }));
+  });
+  savedPositions = toSave;
+  saveToDisk(savedPositions);
+  const btn = document.getElementById('btn-save');
+  btn.classList.add('saved');
+  btn.textContent = '✓ Salvo!';
+  setTimeout(()=>{ btn.classList.remove('saved'); btn.textContent='💾 Salvar Posições'; }, 2500);
+}
+
+function resetPositions() {
+  if (!confirm('Resetar TODAS as posições para o padrão?')) return;
+  savedPositions = {};
+  localStorage.removeItem(STORAGE_KEY);
+  buildHSMap();
+  Object.keys(HS_MAP).forEach(id => {
+    const img = document.getElementById('img-' + id);
+    if (img && img.complete && img.naturalWidth) placeHotspots(id);
+  });
+}
+
+/* ══ MENU ══ */
+function toggleMenu() {
+  document.getElementById('side-menu').classList.toggle('open');
+  document.getElementById('menu-overlay').classList.toggle('active');
+}
+function closeMenu() {
+  document.getElementById('side-menu').classList.remove('open');
+  document.getElementById('menu-overlay').classList.remove('active');
+}
+
+/* ══ TOOLTIP ══ */
+const tipEl = document.getElementById('tip');
+function tip(e, txt) { tipEl.textContent=txt; tipEl.classList.add('show'); tipMove(e); }
+function tipMove(e) { tipEl.style.left=(e.clientX+14)+'px'; tipEl.style.top=(e.clientY-34)+'px'; }
+function hideTip() { tipEl.classList.remove('show'); }
+
+/* ══ PARTICLES ══ */
+(function(){
+  const c = document.getElementById('particles');
+  for(let i=0;i<20;i++){
+    const p=document.createElement('div'); p.className='p';
+    p.style.left=Math.random()*100+'%';
+    p.style.width=p.style.height=(Math.random()*2+1)+'px';
+    p.style.animationDuration=(Math.random()*12+8)+'s';
+    p.style.animationDelay=-(Math.random()*20)+'s';
+    c.appendChild(p);
+  }
+})();
+
+/* ══ PRELOAD ══ */
+[
+  '68644a13c_page_2.png','5b37f0b88_page_3.png','3157b4f81_page_4.png',
+  '250ea676e_page_5.png','61ee527b4_page_6.png','49a005d30_page_7.png',
+  '0e36fd969_page_8.png','ed2970fcd_page_9.png','8a47248bc_page_10.png',
+  'b35f4377e_page_11.png','a996e08e6_page_12.png','150441b4e_page_13.png',
+  'fdc60deaf_page_14.png','5819a9cb6_page_15.png','db022dfcc_page_16.png',
+  '569a87282_page_17.png','8a243bef6_page_18.png','bceb0cc33_page_19.png',
+  '7165ffc72_page_20.png','1133aabed_page_21.png','00a6bac16_page_22.png',
+  '9283c7a31_page_23.png','3304bdef7_page_24.png','a3dbe5c8e_page_25.png',
+  '08607fe94_page_26.png','3d7b24019_page_27.png','1a71f9400_page_28.png',
+  'a3f58c0a4_page_29.png','bce30e0f7_page_30.png','7f5bfb92c_page_31.png',
+  'bf7613bad_page_32.png'
+].forEach(f=>{ const i=new Image(); i.src=BASE+f; });
+
+/* ══ TOKEN SYSTEM ══ */
+const TOKEN_CLASSES = [
+  { id:'barbarian', name:'Bárbaro',    img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/445a91e7a_generated_image.png' },
+  { id:'bard',      name:'Bardo',      img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/e78e96788_generated_image.png' },
+  { id:'cleric',    name:'Clérigo',    img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/2f7a13572_generated_image.png' },
+  { id:'druid',     name:'Druida',     img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/d11beb81f_generated_image.png' },
+  { id:'fighter',   name:'Guerreiro',  img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/016b479cf_generated_image.png' },
+  { id:'monk',      name:'Monge',      img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/a353652a9_generated_image.png' },
+  { id:'paladin',   name:'Paladino',   img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/8e46d6a64_generated_image.png' },
+  { id:'ranger',    name:'Patrulheiro',img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/38f407996_generated_image.png' },
+  { id:'rogue',     name:'Ladino',     img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/e716d7e9d_generated_image.png' },
+  { id:'sorcerer',  name:'Feiticeiro', img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/d32ee1d9c_generated_image.png' },
+  { id:'warlock',   name:'Bruxo',      img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/0580909d6_generated_image.png' },
+  { id:'wizard',    name:'Mago',       img:'https://media.base44.com/images/public/6a1f2337e15ea9fba39f7cf8/2b99b429a_generated_image.png' },
+];
+
+let tokenPanelOpen = false;
+let placedTokens = []; // {id, classId, el, x%, y%, screenId}
+let tokenCounter = 0;
+
+function toggleTokenPanel() {
+  tokenPanelOpen = !tokenPanelOpen;
+  document.getElementById('token-panel').classList.toggle('open', tokenPanelOpen);
+}
+
+// Build panel grid
+(function buildTokenPanel() {
+  const grid = document.getElementById('tp-grid');
+  TOKEN_CLASSES.forEach(cls => {
+    const btn = document.createElement('div');
+    btn.className = 'tp-token';
+    btn.innerHTML = `<img src="${cls.img}" alt="${cls.name}"/><span>${cls.name}</span>`;
+    btn.onclick = () => placeToken(cls);
+    grid.appendChild(btn);
+  });
+})();
+
+function placeToken(cls) {
+  // Place token on current active screen's overlay (or first overlay found)
+  const screenEl = document.getElementById(current);
+  if (!screenEl) return;
+  const ovEl = screenEl.querySelector('.overlay');
+  if (!ovEl) return;
+
+  const tid = 'tok_' + (++tokenCounter);
+  const startX = 45 + Math.random()*10; // % of overlay
+  const startY = 40 + Math.random()*10;
+
+  const tok = document.createElement('div');
+  tok.className = 'map-token';
+  tok.id = tid;
+
+  const ovRect = ovEl.getBoundingClientRect();
+  const px = (startX/100) * ovRect.width;
+  const py = (startY/100) * ovRect.height;
+  tok.style.cssText = `left:${px}px;top:${py}px;`;
+
+  const delBtn = document.createElement('div');
+  delBtn.className = 'tok-del';
+  delBtn.textContent = '✕';
+  delBtn.onclick = e => { e.stopPropagation(); removeToken(tid); };
+
+  const img = document.createElement('img');
+  img.src = cls.img;
+  img.alt = cls.name;
+
+  const label = document.createElement('div');
+  label.className = 'tok-label';
+  label.textContent = cls.name;
+
+  tok.appendChild(delBtn);
+  tok.appendChild(img);
+  tok.appendChild(label);
+
+  // Make draggable
+  makeTokenDraggable(tok, ovEl);
+
+  ovEl.appendChild(tok);
+  placedTokens.push({ id: tid, classId: cls.id, screenId: current, el: tok });
+}
+
+function removeToken(tid) {
+  const idx = placedTokens.findIndex(t => t.id === tid);
+  if (idx === -1) return;
+  placedTokens[idx].el.remove();
+  placedTokens.splice(idx, 1);
+}
+
+function makeTokenDraggable(tok, ovEl) {
+  let startX, startY, startLeft, startTop;
+
+  tok.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('tok-del')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tok.classList.add('dragging-token');
+    startX = e.clientX; startY = e.clientY;
+    startLeft = parseFloat(tok.style.left) || 0;
+    startTop  = parseFloat(tok.style.top)  || 0;
+    hideTip();
+
+    function onMove(e) {
+      const ovRect = ovEl.getBoundingClientRect();
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      const newL = Math.max(-20, Math.min(ovRect.width  - 30, startLeft + dx));
+      const newT = Math.max(-20, Math.min(ovRect.height - 30, startTop  + dy));
+      tok.style.left = newL + 'px';
+      tok.style.top  = newT + 'px';
+    }
+    function onUp() {
+      tok.classList.remove('dragging-token');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Touch
+  tok.addEventListener('touchstart', e => {
+    if (e.target.classList.contains('tok-del')) return;
+    e.stopPropagation();
+    const touch = e.touches[0];
+    startX = touch.clientX; startY = touch.clientY;
+    startLeft = parseFloat(tok.style.left) || 0;
+    startTop  = parseFloat(tok.style.top)  || 0;
+    tok.classList.add('dragging-token');
+  }, {passive:true});
+  tok.addEventListener('touchmove', e => {
+    e.stopPropagation();
+    const touch = e.touches[0];
+    const ovRect = ovEl.getBoundingClientRect();
+    const newL = Math.max(-20, Math.min(ovRect.width -30, startLeft + touch.clientX - startX));
+    const newT = Math.max(-20, Math.min(ovRect.height-30, startTop  + touch.clientY - startY));
+    tok.style.left = newL + 'px'; tok.style.top = newT + 'px';
+  }, {passive:true});
+  tok.addEventListener('touchend', e => {
+    tok.classList.remove('dragging-token');
+  }, {passive:true});
+}
+
+/* ══ OFFLINE FALLBACK ══ */
+document.addEventListener('error', e => {
+  const t = e.target;
+  if (t.tagName==='IMG') {
+    const m = t.src.match(/page_(\d+)\.png/);
+    if (m && !t.src.includes('imagens/')) t.src = 'imagens/page_'+m[1]+'.png';
+  }
+}, true);
+</script>
+</body>
+</html>
